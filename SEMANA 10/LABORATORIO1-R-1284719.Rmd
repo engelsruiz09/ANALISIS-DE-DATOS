@@ -1,0 +1,108 @@
+---
+title: "LABORATORIO R#1 JULIO RUIZ 1284719 R Notebook"
+output: html_notebook
+---
+```{r}
+  x <- 1:4 #creamos un vector con los numeros del 1 al 4
+  #x * 2 # se multiplican por 2 los elementos del vector
+  x
+  # creamos un segundo vector con numeros del 5 al 9
+  y <- 5:8
+  y
+  
+  
+  #operacion vectorizada sobre estos dos vectores
+  
+  x + y # va a sumar la posicion de cada elemento la 1 con la 1 y asi sucesivamente
+  #tiene que tener las mismas dimensiones matrices y vectores
+  
+  
+  
+```
+```{r}
+#creamos una matriz
+z <- matrix(1:12,nrow = 3, ncol = 4) #se crean las columnas primero
+z * -1 #multiplicar cada elemento de la matriz (-1)
+  
+```
+```{r}
+library(dplyr)
+library(nycflights13)
+```
+```{r}
+#creamos el dataset
+flights #funcion print
+glimpse(flights) #muestra el dataset de manera transpuesta
+str(flights)
+```
+
+```{r}
+flights$carrier <- factor(flights$carrier)
+glimpse(flights)
+```
+
+```{r}
+data <- select (flights,origin,dest) #selecciona dos columnas del dataset
+data
+
+```
+
+```{r}
+flights %>% #se utiliza para encadenar múltiples funciones de manera clara y legible, 
+  select(ends_with('time')) #columnas que terminan con time
+```
+
+```{r}
+table(flights$origin)
+```
+
+```{r}
+dataset1 <- table(flights$origin)
+dataset1
+
+prop.table(table(flights$origin))
+```
+
+```{r}
+dep_delays <- flights %>% 
+                filter(dep_delay >= 60) 
+nrow(dep_delays)
+dep_delays
+```
+
+```{r}
+arr_delays <- flights %>%
+              filter(arr_delay >= 60)
+
+nrow(arr_delays)
+```
+
+```{r}
+flights %>%
+  filter(carrier %in% c("UA","AA"))#la aerolinea sea ua o aa
+```
+
+```{r}
+flights %>%
+  filter (hour %in% c(0:5))
+table(data$hour)
+```
+
+```{r}
+flihgts <- flights %>% 
+              mutate(velocidad = ((distance / 1.605)/(air_time/60)))
+flights
+```
+
+```{r}
+library(ggplot2)
+
+
+flights %>%
+    ggplot(aes(x = arr_delay, y = ..density..)) +
+    geom_density(col = "red", fill= "green") +
+    xlab("Minutos")
+    ylab("Densidad")
+    theme_classic()
+```
+

@@ -1,0 +1,107 @@
+---
+title: "FEATURING ENGINEERING"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+dataset <- read.csv("train_HP.csv")
+head(dataset)
+
+
+```
+```{r}
+#identificando columnas con datos nulos (NA)
+ColsNa <- colnames(dataset)[!complete.cases(t(dataset))]#el (!) quitar cosas que tenga cosas completas
+ColsNa
+
+```
+```{r}
+#obtener un porcentaje de los casos incompletos por columna 
+incompleteData <- dataset %>%
+                  select(ColsNa)
+
+PorcentajeNA <- as.data.frame(apply(incompleteData,2,function(col)sum(is.na(col))/length(col)))
+
+colnames(PorcentajeNA) <- c("Porcentaje")
+#PorcentajeNA
+
+procesables <- PorcentajeNA %>%
+                      filter(Porcentaje <= 0.05)
+procesables
+```
+
+```{r}
+dim(dataset) #1460 filas y 81 columnas
+
+
+dataset %>%
+      ggplot(aes(x=GrLivArea)) + 
+      geom_histogram(color="white", fill="red",alpha=0.08)+
+      theme_minimal()
+
+
+mean(dataset$GrLivArea)
+median(dataset$GrLivArea)
+mode(dataset$GrLivArea)
+```
+```{r}
+#imputacion de datos para completar casos faltantes
+getmode <- function(v){
+      uniqv <-unique(v)
+      uniqv[which.max(tabulate(match(v,uniqv)))]
+}
+dataset$GrLivAreaMean <- ifelse(dataset$GrLivArea,
+                                  mean(dataset$GrLivArea,na.rm = T),
+                                  dataset$GrLivArea)
+
+dataset$GrLivAreaMedian <- ifelse(dataset$GrLivArea,
+                                  median(dataset$GrLivArea,na.rm = T),
+                                  dataset$GrLivArea)
+
+dataset$GrLivAreaMode <- ifelse(dataset$GrLivArea,
+                                  getmode(dataset$GrLivArea),
+                                  dataset$GrLivArea)
+print(getmode(dataset$GrLivArea))
+
+dataset %>%
+      ggplot(aes(x=GrLivArea,y=..density..)) +
+      geom_density(color="blue",alpha=0.8)+
+      geom_density(aes(x=GrLivAreaMean,y=..density..),color="red",alpha=0.8)+
+      geom_density(aes(x=GrLivAreaMedian,y=..density..),color="green",alpha=0.8)+
+      geom_density(aes(x=GrLivAreaMode,y=..density..),color="skyblue",alpha=0.8)+
+      theme_minimal()
+```
+
+```{r}
+#utilizar solo datos completos
+CCA <-dataset[ , apply(dataset,2,function(x) !any(is.na(x)))]
+CCA
+```
+
+```{r}
+#Frequency encodig
+
+  table(dataset$BsmtQual)
+
+  FreqImpact <- dataset %>%
+                group_by(BsmtQual) %>% 
+                summarize(BsmtQualFreq = n(),BsmtQualDensity=n()/nrow(dataset))%>%
+                arrange(-BsmtQualFreq)
+  FreqImpact
+  
+  dataset$bsmQualDensity <- merge(dataset,FreqImpact,by.x = "BsmtQual",by.y = "BsmtQual") %>%
+        select(BsmtQualDensity)
+    
+  merge(dataset,FreqImpact,by.x = "BsmtQual",by.y="BsmtQual")%>%
+          select(BsmtQualDensity)
+  dataset
+```
+
+```{r}
+
+```
+

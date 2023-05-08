@@ -1,0 +1,132 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library('corrplot')
+library('RColorBrewer')
+library(caret)
+library(randomForest)
+library(e1071)#libreria para aprendizaje automatico
+```
+
+
+```{r}
+#importo el conjunto de datos
+tierralejana <- read.csv("ingredientes.csv")
+tierralejana
+```
+
+```{r}
+colSums(is.na(tierralejana))# verificando si no hay datos NA
+```
+
+```{r}
+sum(is.na(test$Cured))
+```
+
+
+```{r}
+summary(tierralejana)
+
+```
+
+```{r}
+head(tierralejana)
+```
+
+
+
+#COMIENZA LA PARTE 2
+
+```{r}
+#dividir el conjunto de datos en entrenamiento y pruebas
+set.seed(123)
+train_index <- createDataPartition(y = tierralejana$Cured, p = 0.8, list = FALSE)
+train <- tierralejana[train_index, ]
+test <- tierralejana[-train_index, ]
+
+#se muestra las dimensiones del conjunto de entrenamiento
+dim(train)
+#se muestra las dimensiones del conjunto de prueba
+dim(test)
+
+```
+
+```{r}
+#entrenar modelos
+#regresion logistica
+logistic_model <- glm(Cured ~ ., data = train, family = binomial())
+summary(logistic_model)
+
+```
+
+```{r}
+# Random Forest
+train$Cured <- as.factor(train$Cured)
+rf_model <- randomForest(Cured ~ ., data = train)
+summary(rf_model)
+```
+
+```{r}
+# SVM
+svm_model <- svm(Cured ~ ., data = train, probability = TRUE)
+summary(svm_model)
+
+```
+
+
+```{r}
+#realizar predicciones
+logistic_preds <- predict(logistic_model, test, type = "response")
+rf_preds <- predict(rf_model, test, type = "prob")[,2]
+svm_preds <- attr(predict(svm_model, test, probability = TRUE), "probabilities")[,2]
+
+```
+
+```{r}
+# calcular recall para cada modelo
+
+# verificar niveles de las clases
+levels(test$Cured)
+levels(factor(logistic_preds > 0.5, levels = c(0, 1)))
+levels(factor(rf_preds > 0.5, levels = c(0, 1)))
+levels(factor(svm_preds > 0.5, levels = c(0, 1)))
+
+# establecer niveles de las clases
+test$Cured <- factor(test$Cured, levels = c(0, 1))
+logistic_preds_factor <- factor(logistic_preds > 0.5, levels = c(0, 1))
+rf_preds_factor <- factor(rf_preds > 0.5, levels = c(0, 1))
+svm_preds_factor <- factor(svm_preds > 0.5, levels = c(0, 1))
+
+# crear matriz de confusion y calcular recall
+conf_matrix_logistic <- confusionMatrix(logistic_preds_factor, test$Cured)
+conf_matrix_rf <- confusionMatrix(rf_preds_factor, test$Cured)
+conf_matrix_svm <- confusionMatrix(svm_preds_factor, test$Cured)
+
+# extraer los valores del Recall de cada matriz de confusión
+recall_logistic <- conf_matrix_logistic$byClass["Recall"]
+recall_rf <- conf_matrix_rf$byClass["Recall"]
+recall_svm <- conf_matrix_svm$byClass["Recall"]
+
+
+
+
+```
+
+```{r}
+#mostrar resultados
+cat("Recall Regresion Logistica:", recall_logistic, "\n")
+cat("Recall Random Forest:", recall_rf, "\n")
+cat("Recall SVM:", recall_svm, "\n")
+
+```
+
+```{r}
+# Supongamos que el modelo Random Forest tiene el mejor rendimiento en términos de recall
+best_model <- rf_model
+```
+

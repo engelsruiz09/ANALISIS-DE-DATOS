@@ -1,0 +1,200 @@
+---
+title:  "LABORATORIO R#2 JULIO RUIZ 1284719 R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+dataset <- read.csv2("hour.csv") #cargar csv al dataset
+dataset$temp <- as.numeric(dataset$temp)
+dataset$atemp <- as.numeric(dataset$atemp)
+dataset$windspeed <- as.numeric(dataset$windspeed)
+dataset$dteday <- as.Date(dataset$dteday,format = "%d/%m/%y")#como la fecha esta en char lo paso a un formato de tipo fecha para poder trabajar mas adelante
+
+dataset
+```
+```{r}
+# 1. que mes es el que tiene la mayor demanda?
+  ds1 <- dataset %>% 
+    group_by(mnth) %>%
+      summarize(suma=sum(cnt))
+  ds1
+  
+  ds1 <- ds1  %>% 
+    arrange(desc(suma))
+  ds1
+   #factor = hacerle entender al ggplot que cada barra es una clasificacion diferente 1 , 2 , 3, 4 mes
+  #fill para manejar las tonalidades del diagrama de barras
+  ggplot(ds1,aes(y = suma, x= factor(mnth),fill=suma)) +
+    geom_bar(position = "dodge",stat = "identity") + 
+    labs(title = "Cantidad de rentas por mes", y = "Cantidad", x = "Mes") +
+    geom_text(aes(label=suma),vjust=1.6, color="white",size=2.5)+
+    theme_minimal()
+```
+```{r}
+# 2. que horas es la de mayor demanda
+
+ds2 <- dataset %>%
+        group_by(hr) %>%
+        summarise(suma = sum(cnt)) #mean, mediana, 
+ds2
+
+  ggplot(ds2,aes(y = suma, x= factor(hr),fill=suma)) +
+    geom_bar(position = "dodge",stat = "identity") + 
+    labs(title = "Cantidad de rentas por hora", y = "Cantidad", x = "Hora") +
+    geom_text(aes(label=suma),vjust=1.6, color="white",size=2.5)+
+    theme_minimal()
+```
+```{r}
+#3. que temporada es la mas alta
+ds3 <- dataset %>%
+        select(season,cnt) %>% #solo quiero estas dos columnas
+        mutate(temporada = case_when(
+                                      season == 1 ~ "Primavera",
+                                      season == 2 ~ "Verano",
+                                      season == 3 ~ "Otonoño",
+                                      season == 4 ~ "Invierno"
+                                      
+                                      )
+        )
+#mutate para crear una nueva columna
+
+ds3 <- ds3 %>% 
+    group_by(temporada) %>%
+    summarize(suma=sum(cnt))
+ds3
+
+ggplot(ds3,aes(y = suma, x= factor(temporada),fill=suma)) +
+    geom_bar(position = "dodge",stat = "identity") + 
+    labs(title = "Cantidad de rentas por temporada", y = "Cantidad", x = "Temporada") +
+    geom_text(aes(label=suma),vjust=1.6, color="white",size=2.5)+
+    theme_minimal()
+
+ggplot(ds3,aes(y = suma, x="",fill=temporada)) +
+    geom_bar(stat = "identity",width = 1) +
+    coord_polar("y",start=0)+
+    theme_void()+
+    theme(legend.position = "none")+
+    geom_text(aes(label=temporada,y=suma),color="white",size=5)+
+    scale_fill_brewer(palette="Set1")
+
+```
+```{r}
+#4.a que temperatura baja la demanda
+ds4 <- dataset %>%
+  group_by(temp) %>%
+  summarize(suma = sum(cnt))
+ 
+ds4 %>%
+  arrange(temp)
+ds4 %>%
+  
+  ggplot(aes(x=temp,y=suma,label=temp))+
+  geom_line()+
+  theme_minimal()
+```
+```{r}
+#5. ¿A que humedad baja la demanda?
+dataset %>%
+  group_by(hum) %>%
+  summarise(avg_count = mean(cnt)) %>%
+  filter(avg_count == min(avg_count))
+```
+```{r}
+#6. ¿Que condiciones climáticas(weather) serian ideales para nuestra demanda? (considere una función de densidad bivariable)
+# Graficar la densidad bivariable entre weather y demanda
+
+#aes = define variables que utilizara los ejes X , Y del grafico
+
+
+ggplot(dataset, aes(x = factor(weathersit), y = cnt)) +
+  geom_point(alpha = 0.5) + #representa cada observacion individual
+  #esta linea de abajo agrega una linea suavizada a la grafica con funcion loess.
+  #se = FALSE evita que se muestren bandas de error estandar alrededor de la linea s   suavizada
+  geom_smooth(method = "loess", se = FALSE, color = "blue", linetype = "dashed") +
+  ggtitle("Cantidad de rentas vs. Condiciones climáticas") +
+  xlab("Condiciones climáticas") +
+  ylab("Cantidad de rentas")
+
+
+
+```
+```{r}
+#7. muestre una grafica de la densidad de rentas
+ggplot(dataset, aes(x = cnt)) +
+  geom_density() +
+  labs(title = "Densidad de rentas",
+       x = "Número de rentas")
+
+
+```
+
+```{r}
+#8.Determine promedio de personas que rentan bicicletas y están registradas.
+
+mean(dataset$registered)#calcula el promedio o la media aritmetica de un conjunto de valores definidos como un vector como parametros
+```
+
+```{r}
+#9. Determine la mediana de personas que rentan bicicletas y no están registradas.
+
+dataset %>%
+  summarise(mediana_personas = median(casual))
+```
+
+```{r}
+#10. Deterimne la renta total, renta promedio por cada tipo de condición climática
+
+dataset %>% 
+  group_by(weathersit) %>% 
+  #summarise resumir variables mediante diversos estadísticos descriptivos
+  summarise(renta_total = sum(cnt), renta_promedio = mean(cnt))
+
+```
+```{r}
+#11. Determine y muestre una gráfica de barras de cada renta por tipo de temporada.
+ggplot(dataset, aes(x = factor(season), y = cnt, fill = factor(season))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Total de rentas por temporada",
+       x = "Temporada",
+       y = "Total de rentas") +
+  scale_fill_discrete(name = "Temporada",
+                      labels = c("Primavera", "Verano", "Otoño", "Invierno"))
+
+
+```
+
+```{r}
+#12. Muestre una gráfica de la densidad por hora.
+dataset %>%
+  group_by(hr) %>%
+  summarize(suma=sum(cnt))%>%
+  ggplot(aes(x=suma, y=..density..))+
+  geom_density(color="red",alpha=0.8)+
+  labs(title = "Densidad por hora",
+       x = "Hora",
+       y = "Density")
+  theme_minimal()
+```
+
+```{r}
+
+#13. . Muestre una gráfica de barras por día del mes como eje x y la cantidad total de alquileres como el eje Y.
+
+dataset$day <- as.POSIXlt(dataset$dteday)$mday#creo una nueva columna en dataset llamada day contiene dia del mes 1 - 31 extraido de la columna dteday 
+dataset %>%
+  group_by(day) %>%
+  summarise(total_rentas = sum(cnt)) %>%
+  ggplot(aes(x = factor(day), y = total_rentas)) +
+  geom_bar(stat = "identity", fill = "purple") +
+   labs(title = "Total de rentas por día del mes",
+       x = "Dia",
+       y = "Total de rentas")
+
+```
+
+

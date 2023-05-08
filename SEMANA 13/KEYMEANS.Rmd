@@ -1,0 +1,54 @@
+---
+title: "Kmeas"
+output: html_notebook
+---
+```{r}
+library(useful)
+library(ggplot2)
+```
+
+
+```{r}
+```
+
+
+```{r}
+wine <- read.csv("wine2.data")
+wine
+head(wine)
+#columna cultivar siempre tiene 1 esa columna para kmeans no sirve 
+```
+```{r}
+winedataset <- wine[,which(names(wine)!="Cultivar")]
+
+winetrain <- kmeans(winedataset,centers=5)
+```
+```{r}
+
+```
+```{r}
+winetrain
+```
+
+
+```{r}
+winetrain <- kmeans(x=winedataset,centers=5)
+plot(winetrain,data=winedataset)
+```
+```{r}
+df <- data.frame(matrix(ncol=2,nrow=0))
+colnames(df) <- c("K","error")
+for (i in 2:25) {
+    winetrain <- kmeans(x=winedataset, centers = i)
+    df[i-1,]<-c(i,winetrain$withinss) #el error completo de todos los clusters
+}
+df
+
+
+```
+```{r}
+ggplot(data<-df,aes(x=K,y=error))+
+  geom_line(linetype="dashed")+
+  geom_point()
+```
+

@@ -1,0 +1,232 @@
+---
+title: "Proyecto final - Simulacro"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library('corrplot')
+library('RColorBrewer')
+
+```
+
+#1. Evaluar y comprender el DATASET
+```{r}
+  datasetoriginal <- read.csv('compradoresbicis.csv',header=T,na.strings = '')
+  datasetoriginal
+```
+
+```{r}
+  summary(datasetoriginal)
+```
+
+```{r}
+  dstest <- datasetoriginal
+  dstest$Marital.Status <- as.factor(dstest$Marital.Status)
+  dstest$Gender <- as.factor(dstest$Gender)
+  dstest$Home.Owner <- as.factor(dstest$Home.Owner)
+  dstest$Purchased.Bike <- as.factor(dstest$Purchased.Bike)
+  dstest$Occupation <- as.factor(dstest$Occupation)
+  dstest$Commute.Distance <- as.factor(dstest$Commute.Distance)
+  dstest$Region <- as.factor(dstest$Region)
+  dstest$Education <- as.factor(dstest$Education)
+```
+
+```{r}
+  str(dstest)
+```
+```{r}
+colSums(is.na(dstest))
+```
+
+```{r}
+summary(dstest)
+```
+
+#limpieza de NAs numericos
+```{r}
+hist(dstest$Income)
+hist(dstest$Children)
+hist(dstest$Cars)
+hist(dstest$Age)
+```
+
+```{r}
+
+  #print('Mediana age: 'as.character(median(dstest$Age)))
+
+  median(na.omit(dstest$Age))
+  mean(na.omit(dstest$Age))
+  #print('Media Age:',mean(dstest$Age))
+  #print('Mediana Income:',median(dstest$Income))
+  #print('Media Income:',mean(dstest$Income))
+  median(na.omit(dstest$Income))
+  mean(na.omit(dstest$Income))
+
+```
+
+```{r}
+colSums(is.na(dstest))
+```
+
+
+```{r}
+  dstest$Income[is.na(dstest$Income)] <- median(na.omit(dstest$Income))
+  dstest$Age[is.na(dstest$Age)] <- mean(na.omit(dstest$Age))
+  ##--------
+  dstest$Cars[is.na(dstest$Cars)] <- mean(na.omit(dstest$Cars))
+  dstest$Children[is.na(dstest$Children)] <- mean(na.omit(dstest$Cars))
+```
+
+```{r}
+  getmode <- function(x){
+       unique_x <- unique(x)
+       tabulate_x <- tabulate(match(x,unique_x))
+       unique_x[tabulate_x == max(tabulate_x)]
+  }
+
+  dstest$Marital.Status[is.na(dstest$Marital.Status)] <- getmode(dstest$Marital.Status)
+  dstest$Gender[is.na(dstest$Gender)] <- getmode(dstest$Gender)
+  dstest$Home.Owner[is.na(dstest$Home.Owner)] <- getmode(dstest$Home.Owner)
+```
+
+```{r}
+write.csv(dstest,"compradoresbicis_clean.csv", quote = FALSE, row.names = TRUE)
+```
+
+```{r}
+  dstest2 <- as.data.frame(dstest2)
+  summary(dstest2)
+```
+
+```{r}
+  devtools::install_github("UBC-MDS/encodeR")
+```
+
+```{r}
+  library(encodeR)
+  dstest2 <- dstest
+  
+
+  dstest2$Purchased.Bike <- ifelse(dstest2$Purchased.Bike == "Yes",1,0)
+   
+  dstest2 <- target_encoder(dstest2,
+                            y = dstest2$Purchased.Bike,
+                            cat_columns = c("Marital.Status", "Gender","Education","Occupation","Commute.Distance","Region","Home.Owner"),
+                            prior = 0.8, 
+                            objective = "regression" 
+                            )
+  dstest2
+
+```
+
+```{r}
+ write.csv(dstest2,"compradoresbicis_numeric.csv", quote = FALSE, row.names = TRUE)
+```
+
+```{r}
+#dstest2 <- read.csv("compradoresbicis_numeric.csv")
+summary(dstest2)
+```
+
+
+```{r}
+   dstest2$train.Income = dstest$Income
+   dstest2$train.Income = (dstest2$train.Income - mean(dstest2$train.Income)) / sd(dstest2$train.Income)
+
+```
+
+```{r}
+#summary(dstest2)
+#cor(dstest2)
+
+library(GGally)
+library(ggplot2)
+# Convert data to numeric
+corr <- dstest2
+ggcorr(corr,
+    method = c("pairwise", "spearman"),
+    nbreaks = 6,
+    hjust = 0.8,
+    label = TRUE,
+    label_size = 3,
+    color = "grey50")
+
+```
+
+```{r}
+set.seed(1234)
+create_train_test <- function(data, size = 0.8, train = TRUE) {
+    n_row = nrow(data)
+    total_row = size * n_row
+    train_sample <- 1: total_row
+    if (train == TRUE) {
+        return (data[train_sample, ])
+    } else {
+        return (data[-train_sample, ])
+    }
+}
+data_train <- create_train_test(dstest2, 0.8, train = TRUE)
+data_test <- create_train_test(dstest2, 0.8, train = FALSE)
+dim(data_train)
+dim(data_test)
+```
+
+```{r}
+summary(data_train)
+```
+
+
+
+
+```{r}
+    write.csv(dstest2,"compradoresbicis_final.csv", quote = FALSE, row.names = TRUE)
+```
+
+```{r}
+  model <- glm(train.Purchased.Bike~train.Commute.Distance+train.Education+train.Cars+train.Occupation,data_train,family = binomial())
+  summary(model)
+```
+
+```{r}
+predict <- predict(model, data_test, type = 'response')
+# confusion matrix
+table_mat <- table(data_test$train.Purchased.Bike, predict > 0.5)
+table_mat
+```
+```{r}
+accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)
+accuracy_Test
+```
+
+
+```{r}
+precision <- function(matrix) {
+	# True positive
+    tp <- matrix[2, 2]
+	# false positive
+    fp <- matrix[1, 2]
+    return (tp / (tp + fp))
+}
+
+recall <- function(matrix) {
+# true positive
+    tp <- matrix[2, 2]# false positive
+    fn <- matrix[2, 1]
+    return (tp / (tp + fn))
+}
+
+prec <- precision(table_mat)
+prec
+rec <- recall(table_mat)
+rec
+
+```
+
+```{r}
+f1 <- 2 * ((prec * rec) / (prec + rec))
+f1
+```
+

@@ -1,0 +1,95 @@
+---
+title: "R Notebook REGRESIONLINEAL con compradores bicis"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(corrplot) #ayudar a ver la mitad de los 1unos mas bonita
+library(RColorBrewer)
+```
+
+#1.evaluar y comprender el dataset
+```{r}
+datasetoriginal <- read.csv("compradoresbicis.csv", header=T,na.strings = '')
+head(datasetoriginal)
+
+#paso 1 evaluar dataset
+#paso 2 datos faltantes
+#paso 3 transformar variables categoricas
+#paso 4 normalizar
+#paso 5 correlacion
+#paso 6 experimentacion
+```
+
+```{r}
+#variable objetivo purchased.bike
+summary(datasetoriginal)
+```
+
+```{r}
+
+dstest <- datasetoriginal
+dstest$Marital.Status <-as.factor(dstest$Marital.Status)
+dstest$Gender <-as.factor(dstest$Gender)
+dstest$Home.Owner <-as.factor(dstest$Home.Owner)
+dstestPurchased.Bike <-as.factor(dstest$Purchased.Bike)
+dstest$Occupation <-as.factor(dstest$Occupation)
+dstest$Commute.Distance <-as.factor(dstest$Commute.Distance)
+dstest$Region <-as.factor(dstest$Region)
+dstest$Education <-as.factor(dstest$Education)
+```
+
+```{r}
+str(dstest)
+```
+
+```{r}
+colSums(is.na(dstest))#numero de registros que tiene NA
+```
+
+```{r}
+summary(dstest)
+```
+#limpieza de NAs numericos
+```{r}
+hist(dstest$Income)
+hist(dstest$Children)
+hist(dstest$Cars)
+hist(dstest$Age)
+```
+
+```{r}
+
+#print('Mediana age:', as.median(dstest$Age))
+#print('Media Age', mean(dstest$Income))
+
+#print('Mediana Income:', median(dstest$Income))
+#print('Media Income', median(dstest$Income))
+median(na.omit(dstest$Income))
+mean(na.omit(dstest$Income))
+
+median(na.omit(dstest$Age))
+mean(na.omit(dstest$Age))
+```
+```{r}
+dstest$Income[is.na(dstest$Income)] <- median(na.omit(dstest$Income))
+dstest$Age[is.na(dstest$Age)] <- mean(na.omit(dstest$Age))
+```
+
+```{r}
+getmode <-function(x){
+  unique_x <-unique(x)
+  tabulate_x <- tabulate(match(x,unique_x))
+  unique_x[tabulate_x == max(tabulate_x)]
+}
+
+dstest$Marital.Status[is.na(dstest$Marital.Status)] <- getmode(dstest$Marital.Status)
+```
+
+
+```{r}
+colSums(is.na(dstest))
+```
+

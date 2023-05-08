@@ -1,0 +1,128 @@
+---
+title: "Clustering y Feature Engineering - 1284719"
+output: html_notebook
+---
+
+```{r}
+# Importar las librerías necesarias
+library(ggplot2)
+library(useful)
+
+```
+
+```{r}
+# Cargar el conjunto de datos
+data <- read_csv("segmentation data.csv")
+
+data
+
+```
+```{r}
+# Estadística general de los datos
+summary(data)
+```
+
+```{r}
+# Limpiar datos
+data_clean <- data %>% select(-ID) # Remover columna ID
+
+
+```
+```{r}
+summary(data)#verificacion de eliminacion de columna ID
+```
+
+```{r}
+any(is.na(data_clean)) # Verificar si hay datos nulos
+```
+
+```{r}
+# Escalar la columna Income
+data_scaled <- data_clean %>%
+  mutate(Income_scaled = (Income - mean(Income)) / sd(Income)) %>%
+  select(-Income)
+```
+
+```{r}
+# Función para obtener el número óptimo de clusters y errores
+get_kmeans_errors <- function(data, min_clusters, max_clusters) {
+  kmeans_errors <- tibble(n_clusters = integer(), tot_withinss = double())
+
+  for (i in min_clusters:max_clusters) {
+    kmeans_result <- kmeans(data, centers = i)
+    new_row <- tibble(n_clusters = i, tot_withinss = kmeans_result$tot.withinss)
+    kmeans_errors <- bind_rows(kmeans_errors, new_row)
+  }
+
+  return(kmeans_errors)
+}
+```
+
+```{r}
+# Ejecutar kmeans en el dataset original y el escalado
+kmeans_errors_original <- get_kmeans_errors(data_clean, 2, 25)
+kmeans_errors_scaled <- get_kmeans_errors(data_scaled, 2, 25)
+
+```
+
+
+```{r}
+# Graficar ley del codo con ggplot2 para el dataset original
+ggplot(kmeans_errors_original, aes(x = n_clusters, y = tot_withinss)) +
+  geom_point(size = 3) +
+  geom_line() +
+  theme_minimal() +
+  xlab("Número de clusters") +
+  ylab("Suma de cuadrados dentro del grupo") +
+  ggtitle("Ley del codo - Dataset original")
+
+# Graficar ley del codo con ggplot2 para el dataset escalado
+ggplot(kmeans_errors_scaled, aes(x = n_clusters, y = tot_withinss)) +
+  geom_point(size = 3) +
+  geom_line() +
+  theme_minimal() +
+  xlab("Número de clusters") +
+  ylab("Suma de cuadrados dentro del grupo") +
+  ggtitle("Ley del codo - Dataset escalado")
+```
+
+```{r}
+# Determinar el número óptimo de clusters
+optimal_clusters_original <- which.min(kmeans_errors_original$tot_withinss)
+optimal_clusters_scaled <- which.min(kmeans_errors_scaled$tot_withinss)
+```
+
+```{r}
+# Ejecutar kmeans con el número óptimo de clusters
+kmeans_optimal_original <- kmeans(data_clean, centers = optimal_clusters_original)
+kmeans_optimal_scaled <- kmeans(data_scaled, centers = optimal_clusters_scaled)
+
+```
+
+```{r}
+# Ejecutar PCA para reducir la dimensionalidad de los datos
+pca_original <- prcomp(data_clean, scale. = TRUE)
+pca_scaled <- prcomp(data_scaled, scale. = TRUE)
+```
+
+```{r}
+# Agregar los clusters óptimos a los resultados de PCA
+pca_original_df <- data.frame(pca_original$x[, 1:2], cluster = factor(kmeans_optimal_original$cluster))
+pca_scaled_df <- data.frame(pca_scaled$x[, 1:2], cluster = factor(kmeans_optimal_scaled$cluster))
+
+```
+
+
+```{r}
+# Graficar los clusters óptimos con ggplot2
+ggplot(pca_original_df, aes(x = PC1, y = PC2, color = cluster)) +
+  geom_point(size = 3, alpha = 0.7) +
+  theme_minimal() +
+  ggtitle("Clustering óptimo - Dataset original")
+
+ggplot(pca_scaled_df, aes(x = PC1, y = PC2, color = cluster)) +
+  geom_point(size = 3, alpha = 0.7) +
+  theme_minimal() +
+  ggtitle("Clustering óptimo - Dataset escalado")
+```
+

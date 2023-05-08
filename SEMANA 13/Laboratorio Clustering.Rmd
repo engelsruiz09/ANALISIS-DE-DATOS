@@ -1,0 +1,115 @@
+---
+title: "Laboratorio clustering Eddie Girón"
+output: html_notebook
+---
+
+
+```{r}
+
+library(useful)
+library(ggplot2)
+
+```
+
+```{r}
+dataset <- read.csv("segmentation data.csv")
+dataset
+```
+
+#dataset sin "ID" ni datos nulos
+
+```{r}
+
+datasetmod <- subset(dataset, select = c(Sex, Marital.status, Age, Education, Income, Occupation, Settlement.size))
+
+datasetmod
+
+```
+
+```{r}
+sum(is.na(data))
+```
+
+
+#Entrenando el algoritmo
+```{r}
+
+datatrain <- kmeans(datasetmod, centers = 5)
+
+```
+
+```{r}
+datatrain
+```
+
+
+#Diagrama con centros
+```{r}
+
+plot(datatrain, data = datasetmod)
+
+```
+#Aplicando regla del codo para verificar la mejor cantidad de centros
+```{r}
+  df <- data.frame(matrix(ncol = 2, nrow = 0))
+  colnames(df) <- c("K", "error")
+  for (i in 2:25) {
+    datatrain <- kmeans(x=datasetmod,centers = i)
+    df[i-1,] <- c(i,datatrain$withinss)
+    
+  }
+  df
+```
+
+#Gráfica de regla del codo
+#R/ Según la gráfica, la mejor cantidad de centros en relación al porcentaje de error es de 5 centros, ya que a medida que se colocan mas centros puede que baje el error, sin embargo este no es tan significativo como con 5 centros a menos.
+```{r}
+  ggplot(data = df, aes(x = K, y=error)) +
+  geom_line(linetype="dashed") +
+  geom_point()
+```
+#Transformando la columna income 
+```{r}
+datasetmod2 <- datasetmod
+datasetmod2$Income <- (datasetmod2$Income - mean(datasetmod2$Income)) / sd(datasetmod2$Income)
+datasetmod2
+
+```
+#Repitiendo pasos anteriorese con modificaciónes del dataset
+```{r}
+
+datatrain2 <- kmeans(datasetmod2, centers = 5)
+
+```
+
+```{r}
+datatrain2
+```
+
+#Diagrama con centros
+```{r}
+
+plot(datatrain2, data = datasetmod)
+
+```
+
+#Aplicando regla del codo para verificar la mejor cantidad de centros
+```{r}
+  df2 <- data.frame(matrix(ncol = 2, nrow = 0))
+  colnames(df2) <- c("K", "error")
+  for (i in 2:25) {
+    datatrain2 <- kmeans(x=datasetmod2,centers = i)
+    df2[i-1,] <- c(i,datatrain2$withinss)
+    
+  }
+  df2
+```
+
+#Gráfica de regla del codo income modificado
+#R/ Según la gráfica y la ley del codo, la cantidad de centros ideal es 5
+```{r}
+  ggplot(data = df2, aes(x = K, y=error)) +
+  geom_line(linetype="dashed") +
+  geom_point()
+```
+

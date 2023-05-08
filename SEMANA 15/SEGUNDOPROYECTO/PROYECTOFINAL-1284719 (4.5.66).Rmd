@@ -1,0 +1,642 @@
+---
+title: "PROYECTO FINAL - JULIO ANTHONY ENGELS RUIZ COTO 1284719"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library('corrplot')
+library('RColorBrewer')
+library(stringr)#para extraer los titulos relevantes de names
+library(caTools)#la utilizo para la funcion sample.split dividir el cojunto de datos en entrenamiento y prueba
+library(caret)#la utilizo para arboles de regresion 
+library(rpart)#para arboles de regresion
+library(mice)# La libreria mice permite realizar la imputacion de los datos mediante diferentes tecnicas.Multivariate Imputations by Chained Equations (MICE).
+library(kableExtra)#tablas de Markov para visualizar correlaciones de predictores
+
+```
+
+```{r}
+#importo el conjunto de datos
+titanic_data <- read.csv("data_titanic_proyecto.csv")
+titanic_data
+```
+
+```{r}
+summary(titanic_data)
+```
+
+```{r}
+colSums(is.na(titanic_data))
+```
+
+```{r}
+#se imputa el valor a una variable temporal 
+imputed_data <- mice(titanic_data%>%select(Age,PassengerId), method = "norm.boot")
+
+
+```
+
+```{r}
+#se utilizo la funcion de regresion lineal de la libreria mice para imputar valores
+Data_Impu_boot <- mice::complete(imputed_data)
+
+par(mfrow=c(1,2))
+
+plot(density(titanic_data$Age ,na.rm = T),col=2,main="Edad")
+lines(density(Data_Impu_boot$Age ),col=3)
+
+plot(density(titanic_data$PassengerId,na.rm = T),col=2,main="PassengerId")
+lines(density(Data_Impu_boot$PassengerId),col=3)
+
+```
+
+```{r}
+#se utilizo para imputar valores el metodo por valor medio
+imputed_data <- mice(titanic_data%>%select(Age,PassengerId), method = "mean")
+
+
+```
+
+```{r}
+#se muestra graficamente el resultado de la imputacion en color rojo como se puede ver no satisface como el metodo anterior
+Data_Impu_media <- mice::complete(imputed_data)
+
+par(mfrow=c(1,2))
+
+plot(density(titanic_data$Age ,na.rm = T),col=2,main="Edad")
+lines(density(Data_Impu_media$Age ),col=3)
+
+plot(density(titanic_data$PassengerId,na.rm = T),col=2,main="PassengerId")
+lines(density(Data_Impu_media$PassengerId),col=3)
+
+```
+
+
+```{r}
+#de acuerdo al mejor desenpeño en imputacion se eligio el metodo de regresion lineal 
+titanic_data<-titanic_data%>%mutate(Age = Data_Impu_boot$Age, PassengerId = Data_Impu_boot$PassengerId)
+titanic_data
+```
+
+```{r}
+colSums(is.na(titanic_data))
+```
+
+```{r}
+#limpiar y transformar los datos
+titanic_data$Embarked <- as.factor(titanic_data$Embarked)#transformar columna embarked en un factor(variable categorica)
+titanic_data$passenger_class <- as.factor(titanic_data$passenger_class)
+titanic_data$passenger_survived <- as.integer(titanic_data$passenger_survived == "Y") #comparo cada valor de la columna passenger_survived con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+titanic_data$passenger_sex <- as.integer(titanic_data$passenger_sex == "M") #comparo cada valor de la columna passenger_sex con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+```
+
+```{r}
+#extraer los titulos de la columna Name y crear una nueva columna Titulos
+titanic_data$Titulos <- str_extract(titanic_data$Name, "(Mrs|Mr|Miss|Master|Don|Dr|Rev|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|the Countess)\\.")
+
+#reemplazar valores NA (no coincidentes) con Otro
+titanic_data$Titulos[is.na(titanic_data$Titulos)] <- "Otro"
+
+#verificar los cambios realizados
+head(titanic_data)
+```
+
+
+```{r}
+str(titanic_data)#con esto muestro la estructura interna del data frame
+```
+```{r}
+# se crea un nuevo atributo con Cabin a pesar que tiene bastanes datos faltantes vamos a probar donde no hay numero de cabina se tomara como No y donde si hay se tomara como Yes
+titanic_data$HasCabinNum <- ifelse((titanic_data$Cabin != ""), "Yes", "No")
+```
+
+
+```{r}
+#se crea una variable dummy que es Ticket_Class
+
+titanic_data$Ticket <- as.character(titanic_data$Ticket)
+titanic_data$Ticket_class <- ifelse((titanic_data$Ticket != " "), substr(titanic_data$Ticket, 1, 1), "")
+titanic_data$Ticket_class <- as.factor(titanic_data$Ticket_class)
+#convertir los factores en numeros enteros
+titanic_data$Ticket_class <- as.integer(titanic_data$Ticket_class)
+
+```
+
+```{r}
+#se crea una variable dummy que es Deck a partir de la variable cabin
+titanic_data$Cabin <- as.character(titanic_data$Cabin)
+titanic_data$Deck <- ifelse((titanic_data$Cabin == ""), "U", substr(titanic_data$Cabin, 1, 1))
+titanic_data$Deck <- as.factor(titanic_data$Deck)
+titanic_data$Deck <- as.integer(titanic_data$Deck)
+```
+
+```{r}
+str(titanic_data)#con esto muestro la estructura interna con las nuevas variables  del data frame
+```
+
+
+```{r}
+# creo un conjunto de datos sin columnas innecesarias
+titanic_data_clean <- titanic_data %>% select(-Ticket)
+titanic_data_clean
+```
+
+
+
+```{r}
+#creo variables dummy(convertir variables categoricas en variables numericas binarias ) para las variables categoricas
+titanic_data_clean <- titanic_data_clean %>%
+  mutate(
+         Embarked_S = as.integer(Embarked == "S"),
+         Embarked_C = as.integer(Embarked == "C"),
+         Embarked_Q = as.integer(Embarked == "Q"),
+         Age = as.integer(Age),
+          Fare = as.integer(Fare)
+         )
+titanic_data_clean
+
+```
+
+
+```{r}
+# eliminar las variables originales categoricas
+titanic_data_clean <- titanic_data_clean %>%
+  select(-Embarked, - Cabin,- Name)
+titanic_data_clean
+```
+
+
+
+
+```{r}
+#convertir los titulos en factores
+#obtener los niveles únicos de los titulos
+titulos_unicos <- unique(titanic_data_clean$Titulos)
+
+#convertir los titulos en factores utilizando los niveles unicos
+titanic_data_clean$Titulos <- factor(titanic_data_clean$Titulos, levels = titulos_unicos)
+
+#convertir los factores en numeros enteros
+titanic_data_clean$Titulos <- as.integer(titanic_data_clean$Titulos)
+
+titanic_data_clean
+```
+
+```{r}
+#convertir class pasajeros en factores
+#obtener los niveles únicos de los titulos
+pasajeros_unicos <- unique(titanic_data_clean$passenger_class)
+
+#convertir los titulos en factores utilizando los niveles unicos
+titanic_data_clean$passenger_class <- factor(titanic_data_clean$passenger_class, levels = pasajeros_unicos)
+
+#convertir los factores en numeros enteros
+titanic_data_clean$passenger_class <- as.integer(titanic_data_clean$passenger_class)
+
+#mostrar un resumen de la columna Titulos
+summary(titanic_data_clean$passenger_class)
+
+
+
+
+titanic_data_clean
+```
+
+
+```{r}
+#se crea una nueva variable dummy llamada HascabinNum 
+#convertir HascabinNum en factores
+#obtener los niveles únicos de las cabinas
+cabinas_unicas <- unique(titanic_data_clean$HasCabinNum)
+
+#convertir los titulos en factores utilizando los niveles unicos
+titanic_data_clean$HasCabinNum <- factor(titanic_data_clean$HasCabinNum, levels = cabinas_unicas)
+
+#convertir los factores en numeros enteros
+titanic_data_clean$HasCabinNum <- as.integer(titanic_data_clean$HasCabinNum)
+
+titanic_data_clean
+```
+
+
+
+```{r}
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = titanic_data_clean$Fare, main = "Histograma de FARE", 
+     xlab = "Fare", ylab = "Frecuencia",
+     col = "ivory")
+#como se puede apreciar esta variable tiene mucho sesgo a la derecha
+```
+
+
+
+
+```{r}
+
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = log(titanic_data_clean$Fare+2), main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+# aplicando logaritmos naturales a los datos de la varaible se ve que mejora la distribucion
+
+```
+
+
+
+```{r}
+
+#se tranforman los datos aplicando logaritmo
+log_1 <- log(titanic_data_clean$Fare+2)#
+titanic_data_clean$Fare_log <- log_1
+
+titanic_data_clean
+
+```
+
+```{r}
+titanic_data_clean <- titanic_data_clean %>%
+   select(-Fare)
+ titanic_data_clean
+
+```
+
+```{r}
+
+#vemos la correlacion de Passenger_survived con el resto de predictores
+corrplot(cor(titanic_data_clean), # Matriz de correlacion
+         method = "shade", # Metodo para el gráfico de correlacion
+         type = "full",    # Estilo del grafico (también "upper" y "lower")
+         diag = TRUE,      # Si TRUE (por defecto), añade la diagonal
+         tl.col = "black", # Color de las etiquetas
+         bg = "white",     # Color de fondo
+         title = "",       # Titulo
+         col = NULL)       # Palate de colores
+
+```
+
+
+
+
+
+
+```{r}
+# dividir los datos en conjuntos de entrenamiento y prueba (80% - 20%)
+set.seed(1234) #establece una semilla para que la division sea reproducible
+
+sample <- sample.split(titanic_data_clean$passenger_survived, SplitRatio = 0.8)
+train_data  <- subset(titanic_data_clean, sample == TRUE)
+validation_data   <- subset(titanic_data_clean, sample == FALSE)
+
+#se muestra las dimensiones del conjunto de entrenamiento
+
+dim(train_data)
+
+#se muestra las dimensiones del conjunto de prueba
+dim(validation_data)
+
+```
+
+```{r}
+#muestra como quedo distribuido el passenger_survived en el dataset de entrenamiento
+train_data %>% 
+  group_by(passenger_survived) %>% 
+  summarise(numero_casos=n())
+```
+
+```{r}
+#muestra como quedo distribuido el passenger_survived en el dataset de validacion
+validation_data %>% 
+  group_by(passenger_survived) %>% 
+  summarise(numero_casos=n())
+```
+
+
+
+
+
+```{r}
+
+# entrenando el modelo de regresión logistica con los predictores que tienen mas correlacion
+model <- rpart(passenger_survived ~ passenger_class + passenger_sex + HasCabinNum + Fare_log + Embarked_S + Embarked_C + Titulos + Deck, data = train_data)
+
+summary(model)
+```
+
+
+
+```{r}
+#predecir la supervivencia utilizando el modelo entrenado en el conjunto de validacion
+predictions <- predict(model, newdata = validation_data, type = "matrix")
+predicted_survived <- ifelse(predictions > 0.5, "Y", "N")
+
+
+#calcular la precision del modelo en el conjunto de validacion
+accuracy <- sum(predicted_survived == validation_data$passenger_survived) / length(validation_data$passenger_survived)
+accuracy
+
+```
+
+```{r}
+#funciones para calcular precision, recall y F1 score
+precision <- function(matrix) {
+	# True positive
+    tp <- matrix[2, 2]
+	# false positive
+    fp <- matrix[1, 2]
+    return (tp / (tp + fp))
+}
+
+recall <- function(matrix) {
+# true positive
+    tp <- matrix[2, 2]# false positive
+    fn <- matrix[2, 1]
+    return (tp / (tp + fn))
+}
+#creando una matriz de confusion
+conf_matrix <- table(predicted_survived, validation_data$passenger_survived)
+
+prec <- precision(conf_matrix)
+prec
+rec <- recall(conf_matrix)
+rec
+```
+
+```{r}
+f1 <- 2 * ((prec * rec) / (prec + rec))
+f1
+```
+#AQUI TERMINA EL ENTRENAMIENTO DEL MODELO DE REGRESION LOGISTICA BINOMIAL 
+
+```{r}
+#importo el conjunto de datos
+evaluation_data <- read.csv("evaluation_dataset.csv")
+evaluation_data
+```
+
+```{r}
+summary(evaluation_data)
+```
+
+```{r}
+#limpiar y transformar los datos
+evaluation_data$Embarked <- as.factor(evaluation_data$Embarked)#transformar columna embarked en un factor(variable categorica)
+evaluation_data$passenger_class <- as.factor(evaluation_data$passenger_class)
+evaluation_data$passenger_sex <- as.integer(evaluation_data$passenger_sex == "M") #comparo cada valor de la columna passenger_sex con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+
+```
+
+```{r}
+#extraer los titulos de la columna Name y crear una nueva columna Titulos
+evaluation_data$Titulos <- str_extract(evaluation_data$Name, "(Mrs|Mr|Miss|Master|Don|Dr|Rev|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|the Countess|Jonkheer)\\.")
+
+#reemplazar valores NA (no coincidentes) con Otro
+evaluation_data$Titulos[is.na(evaluation_data$Titulos)] <- "Otro"
+
+#verificar los cambios realizados
+head(evaluation_data)
+```
+
+```{r}
+str(evaluation_data)#con esto muestro la estructura interna del data frame
+
+```
+
+
+
+```{r}
+colSums(is.na(evaluation_data))
+```
+
+```{r}
+imputed_data <- mice(evaluation_data%>%select(Age,PassengerId), method = "norm.boot")
+
+
+```
+
+
+```{r}
+Data_Impu_boot <- mice::complete(imputed_data)
+
+par(mfrow=c(1,2))
+
+plot(density(evaluation_data$Age ,na.rm = T),col=2,main="Edad")
+lines(density(Data_Impu_boot$Age ),col=3)
+
+plot(density(evaluation_data$PassengerId,na.rm = T),col=2,main="PassengerId")
+lines(density(Data_Impu_boot$PassengerId),col=3)
+
+```
+
+
+```{r}
+
+#evaluation_data$Age[is.na(evaluation_data$Age)] <- mean(evaluation_data$Age, na.rm = TRUE)
+evaluation_data<-evaluation_data%>%mutate(Age = Data_Impu_boot$Age, PassengerId = Data_Impu_boot$PassengerId)
+evaluation_data
+
+```
+
+```{r}
+colSums(is.na(evaluation_data))
+```
+```{r}
+# se crea un nuevo atributo con Cabin a pesar que tiene bastanes datos faltantes vamos a probar donde no hay numero de cabina se tomara como No y donde si hay se tomara como Yes
+evaluation_data$HasCabinNum <- ifelse((evaluation_data$Cabin != ""), "Yes", "No")
+```
+
+
+```{r}
+#agrupamos la clase del boleto
+evaluation_data$Ticket <- as.character(evaluation_data$Ticket)
+evaluation_data$Ticket_class <- ifelse((evaluation_data$Ticket != " "), substr(evaluation_data$Ticket, 1, 1), "")
+evaluation_data$Ticket_class <- as.factor(evaluation_data$Ticket_class)
+#convertir los factores en numeros enteros
+evaluation_data$Ticket_class <- as.integer(evaluation_data$Ticket_class)
+
+```
+
+```{r}
+#agrupamos la clase del boleto
+evaluation_data$Cabin <- as.character(evaluation_data$Cabin)
+evaluation_data$Deck <- ifelse((evaluation_data$Cabin == ""), "U", substr(evaluation_data$Cabin, 1, 1))
+evaluation_data$Deck <- as.factor(evaluation_data$Deck)
+evaluation_data$Deck <- as.integer(evaluation_data$Deck)
+```
+
+```{r}
+# creo un conjunto de datos sin columnas innecesarias
+evaluation_data_clean <- evaluation_data %>% select(-Name)
+evaluation_data_clean
+```
+
+
+
+
+```{r}
+#creo variables dummy(convertir variables categoricas en variables numericas binarias ) para las variables categoricas
+evaluation_data_clean <- evaluation_data_clean %>%
+  mutate(
+         Age = as.integer(Age),
+         Embarked_S = as.integer(Embarked == "S"),
+         Embarked_C = as.integer(Embarked == "C"),
+         Embarked_Q = as.integer(Embarked == "Q"),
+         Fare = as.integer(Fare)
+         )
+evaluation_data_clean
+```
+
+
+
+```{r}
+ #eliminar las variables originales categoricas
+evaluation_data_clean <- evaluation_data_clean %>%
+  select(- Cabin,- Embarked,-Ticket )
+
+evaluation_data_clean
+```
+
+
+```{r}
+#contando la cantidad de cada titulo de la columna Titulos
+titulo_recuento <- table(evaluation_data_clean$Titulos)
+
+#imprimimiendo el recuento de cada titulo
+print(titulo_recuento)
+```
+
+```{r}
+#convertir los titulos en factores
+#obtener los niveles únicos de los titulos
+titulos_unicos <- unique(evaluation_data_clean$Titulos)
+
+#convertir los titulos en factores utilizando los niveles unicos
+evaluation_data_clean$Titulos <- factor(evaluation_data_clean$Titulos, levels = titulos_unicos)
+
+#convertir los factores en numeros enteros
+evaluation_data_clean$Titulos <- as.integer(evaluation_data_clean$Titulos)
+
+#mostrar un resumen de la columna Titulos
+summary(evaluation_data_clean$Titulos)
+evaluation_data_clean
+```
+
+
+
+
+```{r}
+#convertir passenger_class en factores
+#obtener los niveles únicos de lpassenger_class
+pasasjeros_unicos <- unique(evaluation_data_clean$passenger_class)
+
+#convertir los titulos en factores utilizando los niveles unicos
+evaluation_data_clean$passenger_class <- factor(evaluation_data_clean$passenger_class, levels = pasasjeros_unicos)
+
+#convertir los factores en numeros enteros
+evaluation_data_clean$passenger_class <- as.integer(evaluation_data_clean$passenger_class)
+
+
+evaluation_data_clean
+```
+
+
+```{r}
+#convertir los titulos en factores
+#obtener los niveles únicos de los titulos
+pasasjeros_unicos <- unique(evaluation_data_clean$HasCabinNum)
+
+#convertir los titulos en factores utilizando los niveles unicos
+evaluation_data_clean$HasCabinNum <- factor(evaluation_data_clean$HasCabinNum, levels = pasasjeros_unicos)
+
+#convertir los factores en numeros enteros
+evaluation_data_clean$HasCabinNum <- as.integer(evaluation_data_clean$HasCabinNum)
+
+
+evaluation_data_clean
+```
+
+```{r}
+#
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = evaluation_data_clean$Fare, main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+#como se puede apreciar esta variable tiene mucho sesgo a la derecha
+```
+
+```{r}
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = log(evaluation_data_clean$Fare+2), main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+# aplicando logaritmos naturales a los datos de la varaible se ve que mejora la distribucion
+```
+
+
+```{r}
+#se tranforman los datos aplicando logaritmo
+log <- log(evaluation_data_clean$Fare+2)#
+evaluation_data_clean$Fare_log <- log
+
+evaluation_data_clean
+```
+
+```{r}
+evaluation_data_clean <- evaluation_data_clean %>%
+   select(-Fare)
+ evaluation_data_clean
+```
+
+
+
+```{r}
+titanic <- rbind(train_data,validation_data)# se hace un solo dataset
+titanic
+```
+
+
+```{r}
+# entrenando el modelo de regresión logistica con el conjunto de entrenamiento
+
+model_test <- rpart(passenger_survived ~ passenger_class + passenger_sex + HasCabinNum + Fare_log + Embarked_S + Embarked_C + Titulos + Deck, data = titanic)
+
+summary(model_test)
+```
+
+
+
+```{r}
+#predecir la supervivencia utilizando el modelo entrenado en el conjunto de validacion
+predictions <- predict(model_test, newdata = evaluation_data_clean, type = "matrix")
+predicted_survived_test <- ifelse(predictions > 0.5, "Y", "N")
+predicted_survived_test
+
+```
+
+```{r}
+#se convierten los valores predecidos a valores de 0=N, 1=Y
+passenger_survived <- as.integer(predicted_survived_test== "Y") #comparo cada valor de la columna passenger_survived con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+passenger_survived
+```
+
+```{r}
+PassengerId <- evaluation_data_clean$PassengerId
+predicciones_data <- cbind(PassengerId , passenger_survived ) 
+predicciones_data
+
+```
+
+```{r}
+
+#en la variable predicciones_data estas las predicciones utilizo sep = "," para especificar un separador personalizado 
+write.csv(predicciones_data, "predictionshoysiultimaprueba.csv", sep = ",", row.names = FALSE)
+
+
+```
+

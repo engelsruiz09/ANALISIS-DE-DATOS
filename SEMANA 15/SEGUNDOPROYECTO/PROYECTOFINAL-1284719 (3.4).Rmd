@@ -1,0 +1,582 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library('corrplot')
+library('RColorBrewer')
+library(stringr)#para extraer los titulos relevantes de names
+library(zoo)#la utilizo para la funcion na.approx() para interpolar los valores faltantes NA de la columna AGE
+library(caTools)#la utilizo para la funcion sample.split dividir el cojunto de datos en entrenamiento y prueba
+library(caret)
+
+```
+
+```{r}
+#importo el conjunto de datos
+titanic_data <- read.csv("data_titanic_proyecto.csv")
+titanic_data
+```
+
+```{r}
+summary(titanic_data)
+```
+
+
+```{r}
+#limpiar y transformar los datos
+titanic_data$Embarked <- as.factor(titanic_data$Embarked)#transformar columna embarked en un factor(variable categorica)
+titanic_data$passenger_class <- as.factor(titanic_data$passenger_class)
+titanic_data$passenger_sex <- as.factor(titanic_data$passenger_sex)
+titanic_data$passenger_survived <- as.integer(titanic_data$passenger_survived == "Y") #comparo cada valor de la columna passenger_survived con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+
+
+```
+
+```{r}
+#extraer los titulos de la columna Name y crear una nueva columna Titulos
+titanic_data$Titulos <- str_extract(titanic_data$Name, "(Mrs|Mr|Miss|Master|Don|Dr|Rev|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|the Countess)\\.")
+
+#reemplazar valores NA (no coincidentes) con Otro
+titanic_data$Titulos[is.na(titanic_data$Titulos)] <- "Otro"
+
+#verificar los cambios realizados
+head(titanic_data)
+```
+
+
+```{r}
+str(titanic_data)#con esto muestro la estructura interna del data frame
+```
+
+
+```{r}
+# creo un conjunto de datos sin columnas innecesarias
+titanic_data_clean <- titanic_data %>% select(-Name, -Ticket, -Cabin)
+titanic_data_clean
+```
+
+
+```{r}
+colSums(is.na(titanic_data_clean))
+```
+
+```{r}
+#contar la cantidad de valores NA en la columna Age por cada titulo
+na_count_by_title <- aggregate(Age ~ Titulos, titanic_data_clean, FUN = function(x) sum(is.na(x)))
+
+#contar cuantos titulos tienen al menos un valor NA en la columna Age
+titles_with_na <- sum(na_count_by_title$Age > 0)
+
+#imprimiendo el resultado
+print(titles_with_na)
+
+```
+
+
+```{r}
+#creo variables dummy(convertir variables categoricas en variables numericas binarias ) para las variables categoricas
+titanic_data_clean <- titanic_data_clean %>%
+  mutate(Male = as.integer(passenger_sex == "M"),
+         Female = as.integer(passenger_sex == "F"),
+         AGE = as.integer(titanic_data_clean$Age),
+         passenger_class = as.integer(passenger_class),
+         #Class_Upper = as.integer(passenger_class == "Upper"),
+         #Class_Middle = as.integer(passenger_class == "Middle"),
+         #Class_Lower = as.integer(passenger_class == "Lower"),
+         Embarked = as.integer(Embarked),
+        # Embarked_S = as.integer(Embarked == "S"),
+        # Embarked_C = as.integer() == "C"),
+        # Embarked_Q = as.integer(Embarked == "Q"),
+         Fare_i = as.integer(Fare)
+         )
+titanic_data_clean
+```
+
+```{r}
+#identificar el titulo que tiene valores NA en la columna AGE
+na_titles <- unique(titanic_data_clean$Titulos[is.na(titanic_data_clean$AGE)])
+
+
+for (title in na_titles) {
+  average_age <- mean(titanic_data_clean$AGE[titanic_data_clean$Titulos == title & !is.na(titanic_data_clean$AGE)], na.rm = TRUE)
+  titanic_data_clean$AGE[titanic_data_clean$Titulos == title & is.na(titanic_data_clean$AGE)] <- average_age
+}
+
+# Verificar que no haya valores faltantes en la columna AGE
+summary(titanic_data_clean$AGE)
+titanic_data_clean
+```
+
+
+```{r}
+#calcular la mediana de la edad para cada titulo
+#mediana_edad_por_titulo <- titanic_data_clean %>%
+ # group_by(Titulos) %>%
+  #summarise(Mediana_Edad = median(AGE, na.rm = TRUE))
+
+#unir la mediana de la edad por titulo al dataset original
+#titanic_data_clean <- left_join(titanic_data_clean, mediana_edad_por_titulo, by = "Titulos")
+
+#imputar los valores faltantes de la columna Age utilizando la mediana de la edad segun el titulo
+#titanic_data_clean$AGE <- ifelse(is.na(titanic_data_clean$AGE), titanic_data_clean$Mediana_Edad, titanic_data_clean$AGE)
+
+#eliminar la columna Mediana_Edad ya que no es necesaria
+#titanic_data_clean <- titanic_data_clean %>%
+ # select(-Mediana_Edad)
+
+#verificar que no haya valores faltantes en la columna AGE
+#summary(titanic_data_clean$AGE)
+#titanic_data_clean
+```
+
+
+```{r}
+#definir una funcion para categorizar la edad
+categorize_age <- function(age) {
+  if (is.na(age)) {
+    return(NA)
+  } else if (age <= 2) {
+    return("Infant")
+  } else if (age <= 12) {
+    return("Child")
+  } else if (age <= 19) {
+    return("Teenager")
+  } else if (age <= 35) {
+    return("Young Adult")
+  } else if (age <= 65) {
+    return("Adult")
+  } else {
+    return("Senior")
+  }
+}
+
+#aplicar la funcion para categorizar la columna Age
+titanic_data_clean <- titanic_data_clean %>%
+  mutate(AgeCategory = sapply(AGE, categorize_age))
+
+#convertir la nueva columna AgeCategory en un factor
+titanic_data_clean$AgeCategory <- as.factor(titanic_data_clean$AgeCategory)
+titanic_data_clean
+
+#mostrar un resumen de la nueva columna AgeCategory
+summary(titanic_data_clean$AgeCategory)
+
+```
+
+```{r}
+
+titanic_data_clean$AgeCategory <- factor(titanic_data_clean$AgeCategory, levels = c("Infant", "Child", "Teenager", "Young Adult", "Adult", "Senior"))
+
+#convertir la columna AgeCategory en una columna numerica
+titanic_data_clean$NumericAgeCategory <- as.integer(titanic_data_clean$AgeCategory)
+
+#mostrar un resumen de la nueva columna NumericAgeCategory
+summary(titanic_data_clean$NumericAgeCategory)
+titanic_data_clean
+
+```
+
+```{r}
+# eliminar las variables originales categoricas
+titanic_data_clean <- titanic_data_clean %>%
+  select(-passenger_sex, -passenger_class,-Age, -AgeCategory,-AGE,-Fare)
+titanic_data_clean
+```
+
+```{r}
+#aca aplico la interpolación lineal a la columna AGE
+#titanic_data_clean$AGE <- na.approx(titanic_data_clean$AGE, na.rm = FALSE)
+
+#redondeo la columna Age a 0 decimales
+#titanic_data_clean$AGE <- round(titanic_data_clean$AGE, 0)
+
+#titanic_data_clean
+```
+```{r}
+#titanic_data_clean$AGE <- as.integer(round(titanic_data_clean$AGE))
+
+#mostrando un resumen de la columna AGE
+#summary(titanic_data_clean$AGE)
+#titanic_data_clean
+```
+
+```{r}
+#contando la cantidad de cada titulo de la columna Titulos
+titulo_recuento <- table(titanic_data_clean$Titulos)
+
+#imprimimiendo el recuento de cada titulo
+print(titulo_recuento)
+```
+
+
+
+```{r}
+#convertir los titulos en factores
+#obtener los niveles únicos de los titulos
+titulos_unicos <- unique(titanic_data_clean$Titulos)
+
+#convertir los titulos en factores utilizando los niveles unicos
+titanic_data_clean$Titulos <- factor(titanic_data_clean$Titulos, levels = titulos_unicos)
+
+#convertir los factores en numeros enteros
+titanic_data_clean$Titulos <- as.integer(titanic_data_clean$Titulos)
+
+#mostrar un resumen de la columna Titulos
+summary(titanic_data_clean$Titulos)
+titanic_data_clean
+```
+
+
+
+```{r}
+#
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = titanic_data_clean$Fare_i, main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+#como se puede apreciar esta variable tiene mucho sesgo a la derecha
+```
+
+
+
+
+```{r}
+
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = log(titanic_data_clean$Fare_i+2), main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+# aplicando logaritmos naturales a los datos de la varaible se ve que mejora la distribucion
+
+```
+
+
+```{r}
+
+#se tranforman los datos aplicando logaritmo
+log <- log(titanic_data_clean$Fare_i+2)#
+titanic_data_clean$Fare_log <- log
+
+
+titanic_data_clean
+
+```
+
+```{r}
+titanic_data_clean <- titanic_data_clean %>%
+  select(-Fare_i)
+titanic_data_clean
+```
+
+```{r}
+# dividir los datos en conjuntos de entrenamiento y validacion (60% - 40%)
+set.seed(123) #establece una semilla para que la division sea reproducible
+
+sample <- sample.split(titanic_data_clean$Titulos, SplitRatio = 0.9)
+train_data  <- subset(titanic_data_clean, sample == TRUE)
+validation_data   <- subset(titanic_data_clean, sample == FALSE)
+
+#se muestra las dimensiones del conjunto de entrenamiento
+
+dim(train_data)
+
+#se muestra las dimensiones del conjunto de validacion
+dim(validation_data)
+
+```
+
+```{r}
+train_data %>% 
+  group_by(passenger_survived) %>% 
+  summarise(numero_casos=n())
+```
+
+```{r}
+validation_data %>% 
+  group_by(passenger_survived) %>% 
+  summarise(numero_casos=n())
+```
+
+```{r}
+# entrenando el modelo de regresión logistica con el conjunto de entrenamiento
+model <- glm(passenger_survived ~ ., data = train_data, family = "binomial")
+summary(model)
+```
+
+```{r}
+#predecir la supervivencia utilizando el modelo entrenado en el conjunto de validacion
+predictions <- predict(model, newdata = validation_data, type = "response")
+predicted_survived <- ifelse(predictions > 0.5, "Y", "N")
+
+
+#calcular la precision del modelo en el conjunto de validacion
+accuracy <- sum(predicted_survived == validation_data$passenger_survived) / length(validation_data$passenger_survived)
+
+accuracy
+```
+
+```{r}
+#funciones para calcular precision, recall y F1 score
+precision <- function(matrix) {
+	# True positive
+    tp <- matrix[2, 2]
+	# false positive
+    fp <- matrix[1, 2]
+    return (tp / (tp + fp))
+}
+
+recall <- function(matrix) {
+# true positive
+    tp <- matrix[2, 2]# false positive
+    fn <- matrix[2, 1]
+    return (tp / (tp + fn))
+}
+#creando una matriz de confusion
+conf_matrix <- table(predicted_survived, validation_data$passenger_survived)
+
+prec <- precision(conf_matrix)
+prec
+rec <- recall(conf_matrix)
+rec
+```
+
+```{r}
+f1 <- 2 * ((prec * rec) / (prec + rec))
+f1
+```
+#AQUI TERMINA EL ENTRENAMIENTO DEL MODELO DE REGRESION LOGISTICA BINOMIAL 
+
+```{r}
+#importo el conjunto de datos
+evaluation_data <- read.csv("evaluation_dataset.csv")
+evaluation_data
+```
+
+```{r}
+summary(evaluation_data)
+```
+
+```{r}
+#limpiar y transformar los datos
+evaluation_data$Embarked <- as.factor(evaluation_data$Embarked)#transformar columna embarked en un factor(variable categorica)
+evaluation_data$passenger_class <- as.factor(evaluation_data$passenger_class)
+evaluation_data$passenger_sex <- as.factor(evaluation_data$passenger_sex)
+
+```
+
+```{r}
+#extraer los titulos de la columna Name y crear una nueva columna Titulos
+evaluation_data$Titulos <- str_extract(evaluation_data$Name, "(Mrs|Mr|Miss|Master|Don|Dr|Rev|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|the Countess|Jonkheer)\\.")
+
+#reemplazar valores NA (no coincidentes) con Otro
+evaluation_data$Titulos[is.na(evaluation_data$Titulos)] <- "Otro"
+
+#verificar los cambios realizados
+head(evaluation_data)
+```
+
+```{r}
+str(evaluation_data)#con esto muestro la estructura interna del data frame
+```
+
+```{r}
+# creo un conjunto de datos sin columnas innecesarias
+evaluation_data_clean <- evaluation_data %>% select(-Name, -Ticket, -Cabin)
+evaluation_data_clean
+```
+
+```{r}
+colSums(is.na(evaluation_data_clean))
+```
+
+```{r}
+#contar la cantidad de valores NA en la columna Age por cada titulo
+na_count_by_title <- aggregate(Age ~ Titulos, evaluation_data_clean, FUN = function(x) sum(is.na(x)))
+
+#contar cuantos titulos tienen al menos un valor NA en la columna Age
+titles_with_na <- sum(na_count_by_title$Age > 0)
+
+#imprimiendo el resultado
+print(titles_with_na)
+```
+
+```{r}
+#creo variables dummy(convertir variables categoricas en variables numericas binarias ) para las variables categoricas
+evaluation_data_clean <- evaluation_data_clean %>%
+  mutate(Male = as.integer(passenger_sex == "M"),
+         Female = as.integer(passenger_sex == "F"),
+         AGE = as.integer(evaluation_data_clean$Age),
+         passenger_class = as.integer(passenger_class),
+        # Class_Upper = as.integer(passenger_class == "Upper"),
+        # Class_Middle = as.integer(passenger_class == "Middle"),
+        # Class_Lower = as.integer(passenger_class == "Lower"),
+         Embarked = as.integer(Embarked ),
+         #Embarked_S = as.integer(Embarked == "S"),
+         #Embarked_C = as.integer(Embarked == "C"),
+         #Embarked_Q = as.integer(Embarked == "Q"),
+         Fare_i = as.integer(Fare)
+         )
+evaluation_data_clean
+```
+
+```{r}
+#identificar el titulo que tiene valores NA en la columna AGE
+na_titles <- unique(evaluation_data_clean$Titulos[is.na(evaluation_data_clean$AGE)])
+
+
+for (title in na_titles) {
+  average_age <- mean(evaluation_data_clean$AGE[evaluation_data_clean$Titulos == title & !is.na(evaluation_data_clean$AGE)], na.rm = TRUE)
+  evaluation_data_clean$AGE[evaluation_data_clean$Titulos == title & is.na(evaluation_data_clean$AGE)] <- average_age
+}
+
+# Verificar que no haya valores faltantes en la columna AGE
+summary(evaluation_data_clean$AGE)
+evaluation_data_clean
+```
+
+```{r}
+#definir una funcion para categorizar la edad
+categorize_age <- function(age) {
+  if (is.na(age)) {
+    return(NA)
+  } else if (age <= 2) {
+    return("Infant")
+  } else if (age <= 12) {
+    return("Child")
+  } else if (age <= 19) {
+    return("Teenager")
+  } else if (age <= 35) {
+    return("Young Adult")
+  } else if (age <= 65) {
+    return("Adult")
+  } else {
+    return("Senior")
+  }
+}
+
+#aplicar la funcion para categorizar la columna Age
+evaluation_data_clean <- evaluation_data_clean %>%
+  mutate(AgeCategory = sapply(AGE, categorize_age))
+
+#convertir la nueva columna AgeCategory en un factor
+evaluation_data_clean$AgeCategory <- as.factor(evaluation_data_clean$AgeCategory)
+evaluation_data_clean
+
+#mostrar un resumen de la nueva columna AgeCategory
+summary(evaluation_data_clean$AgeCategory)
+```
+
+```{r}
+evaluation_data_clean$AgeCategory <- factor(evaluation_data_clean$AgeCategory, levels = c("Infant", "Child", "Teenager", "Young Adult", "Adult", "Senior"))
+
+#convertir la columna AgeCategory en una columna numerica
+evaluation_data_clean$NumericAgeCategory <- as.integer(evaluation_data_clean$AgeCategory)
+
+#mostrar un resumen de la nueva columna NumericAgeCategory
+summary(evaluation_data_clean$NumericAgeCategory)
+evaluation_data_clean
+```
+
+```{r}
+# eliminar las variables originales categoricas
+evaluation_data_clean <- evaluation_data_clean %>%
+  select(-passenger_sex, -passenger_class,-Age, -AgeCategory,-AGE,-Fare)
+evaluation_data_clean
+```
+
+```{r}
+#contando la cantidad de cada titulo de la columna Titulos
+titulo_recuento <- table(evaluation_data_clean$Titulos)
+
+#imprimimiendo el recuento de cada titulo
+print(titulo_recuento)
+```
+
+```{r}
+#convertir los titulos en factores
+#obtener los niveles únicos de los titulos
+titulos_unicos <- unique(evaluation_data_clean$Titulos)
+
+#convertir los titulos en factores utilizando los niveles unicos
+evaluation_data_clean$Titulos <- factor(evaluation_data_clean$Titulos, levels = titulos_unicos)
+
+#convertir los factores en numeros enteros
+evaluation_data_clean$Titulos <- as.integer(evaluation_data_clean$Titulos)
+
+#mostrar un resumen de la columna Titulos
+summary(evaluation_data_clean$Titulos)
+evaluation_data_clean
+```
+
+```{r}
+#
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = evaluation_data_clean$Fare_i, main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+#como se puede apreciar esta variable tiene mucho sesgo a la derecha
+```
+
+```{r}
+#Se grafica el histogra de Fare para ver como es la distribucion de la varaible Fare 
+    
+     hist(x = log(evaluation_data_clean$Fare_i+2), main = "Histograma de Precio ticket", 
+     xlab = "FARE", ylab = "Frecuencia",
+     col = "ivory")
+# aplicando logaritmos naturales a los datos de la varaible se ve que mejora la distribucion
+```
+```{r}
+#se tranforman los datos aplicando logaritmo
+log <- log(evaluation_data_clean$Fare_i+2)#
+evaluation_data_clean$Fare_log <- log
+
+
+evaluation_data_clean
+```
+
+```{r}
+titanic <- rbind(train_data,validation_data)# se hace un solo dataset
+titanic
+```
+
+
+```{r}
+# entrenando el modelo de regresión logistica con el conjunto de entrenamiento
+model_test <- glm(passenger_survived ~ ., data = titanic, family = "binomial")
+summary(model_test)
+```
+
+```{r}
+#predecir la supervivencia utilizando el modelo entrenado en el conjunto de validacion
+predictions_test <- predict(model_test, newdata = evaluation_data_clean, type = "response")
+predicted_survived_test <- ifelse(predictions_test > 0.5, "Y", "N")
+predicted_survived_test
+
+```
+```{r}
+#se convierten los valores predecidos a valores de 0=N, 1=Y
+passenger_survived <- as.integer(predicted_survived_test== "Y") #comparo cada valor de la columna passenger_survived con "Y" TRUE si valor es igual a "Y" y FALSE "N" con as.integer TRUE pasa a 1 y FALSE pasa a 0
+passenger_survived
+```
+```{r}
+PassengerId <- evaluation_data_clean$PassengerId
+predicciones_data <- cbind(PassengerId , passenger_survived ) 
+predicciones_data
+
+```
+
+```{r}
+#en la variable predicciones_data estas las predicciones utilizo sep = "," para especificar un separador personalizado 
+write.csv(predicciones_data, "predictions4.csv", sep = ",", row.names = FALSE)
+
+
+```
+

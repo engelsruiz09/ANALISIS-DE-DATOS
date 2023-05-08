@@ -1,0 +1,150 @@
+---
+title: "R Notebook - REGRESION LINEAL "
+output: html_notebook
+---
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(corrplot) #ayudar a ver la mitad de los 1unos mas bonita
+library(RColorBrewer)
+```
+
+```{r}
+dataset <- read.csv("advertising2.csv", header=T,na.strings = '')
+head(dataset)
+
+#paso 1 evaluar dataset
+#paso 2 datos faltantes
+#paso 3 transformar variables categoricas
+#paso 4 normalizar
+#paso 5 correlacion
+#paso 6 experimentacion
+```
+
+```{r}
+m <- cor(dataset) #darme la correlacion de las variables que existen en el set de datos
+m
+corrplot(m,type="upper",order="hclust",col=brewer.pal(n=8,name="RdYlBu"))
+```
+
+```{r}
+#experimento 1-sales con newspaper
+model <- lm(Sales~Newspaper,data=dataset)#funcion lm
+#summary(model)
+summary(model)$r.squared
+sigma(model)
+```
+
+```{r}
+#tomar la varible mas significativa 
+#experimento 2 sales con TV
+
+model2 <- lm(Sales~TV,data=dataset)#funcion lm
+summary(model2)
+
+```
+
+```{r}
+#experimento3 - sales con TV+Newspaper
+model3 <- lm(Sales~TV+Newspaper,data=dataset)#funcion lm
+summary(model3)
+
+# y = 0.055091x1 +  0.026021x2 + 6.234744
+
+```
+
+```{r}
+model4 <- lm(Sales~TV+Newspaper+Radio,data=dataset)#funcion lm
+summary(model4)
+```
+```{r}
+dstest$Income[is.na(dstest$Income)] <- median(na.omit(dstest$Children))
+dstestAge[is.na(dstest$Age)] <- mean(na.omit(dstest$Children))
+
+dstest$Income[is.na(dstest$Income)] <- median(na.omit(dstest$Cars))
+dstestAge[is.na(dstest$Age)] <- mean(na.omit(dstest$Cars))
+
+
+```
+
+```{r}
+#sigue mas codigo
+```
+
+```{r}
+write.csv(dstest, "Compradoresbicis_clean.csv",quote = FALSE, row.names = TRUE)
+```
+
+```{r}
+devtools::install_github("UBC-MDS/encodeR")
+```
+
+```{r}
+library(encodeR)
+dstest2 <- dstest
+```
+
+```{r}
+#proyecto clasificacion binaria
+dstest2$Purchase.Bike <- ifelse(dstest2$Purchased.Bike == "Yes", 1,0)
+
+dstest2 <- target_encoder(dstest2,
+                          y = dstest2$Purchased.Bike,
+                          cat_columns = c("Marital.Status",
+                                          "Gender", "Education", "Occupation", "Comunate.Distance", "Region", "Home.Owner"), prior = 0.8,objetivo = "regression")
+
+dstest2
+```
+```{r}
+write.csv(dstest2, "Compradoresbicis_clean.csv",quote = FALSE, row.names = TRUE)
+```
+
+```{r}
+dstest2 <- as.data.frame(dstest2)
+summary(dstest2)
+```
+
+```{r}
+dataset$train.Income = (dataset$train.Income - mean(dstest2$train.Income)) /sd(dstest2$train.Income)
+```
+
+```{r}
+library(GGally)
+library(ggplot2)
+
+corr <- dstest2
+ggcor(corr,
+      method = c("pairwaise","spearman"),
+      nbreads = 6,
+      hjust = 0.8,
+      label = TRUE,
+      label_size = 3,
+      color = "grey50")
+```
+
+```{r}
+#train 0.8 , validation = 0.2
+set.seed(1234)
+create_train_test <- function(data, size = 0.8, train = TRUE){
+  n_row = nrow(data)
+  total_row = size * n_row
+  train_sample <- 1: total_row
+  if(train == TRUE){
+    return (data[train_sample, ])
+  }else{
+    return (data[-train_sample, ])
+  }
+}
+data.train <-create_train_test(dstest2, 0.8, train=TRUE)
+data_test <-create_train_test(dstest2, 0.8, train=FALSE)
+dim(data_train)
+dim(data_test)
+```
+
+```{r}
+model <- glm(train.Purchase.Bike=train.Commute.Distance+train.Education,data_train_family = binarial())
+summary(model)
+```
+
